@@ -1,0 +1,12 @@
+name: linux
+version: 3.18.1
+download: ftp://ftp.kernel.org/pub/linux/kernel/v3.0/{{ name }}-{{ version }}.tar.xz
+dependencies:
+  - gcc
+  - binutils
+pass1:
+  - cd {{ name }}-{{ version }}
+  - make INSTALL_HDR_PATH=dest headers_install
+  - cp -rv dest/include/* /tools/include 
+
+

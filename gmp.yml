@@ -1,0 +1,8 @@
+name: gmp
+version: 6.0.0
+download: ftp://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}a.tar.xz
+pass1:
+  - cp -r {{ name }}-{{ version }} /tools/{{ name }}
+
+
+

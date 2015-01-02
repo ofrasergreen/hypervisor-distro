@@ -1,0 +1,8 @@
+name: mpc
+version: 1.0.2
+download: ftp://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}.tar.gz
+pass1:
+  - cp -r {{ name }}-{{ version }} /tools/{{ name }}
+
+
+

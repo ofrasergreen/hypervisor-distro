@@ -13,6 +13,7 @@ import urllib
 import jinja2
 import shutil
 import subprocess
+import copy
 
 docker_client = docker.Client(base_url='tcp://localhost:4243')
 
@@ -62,11 +63,10 @@ class Log:
 
 
 class Template:
-	def __init__(self):
-		self.context = {
-			'pass1_dir': '/pass1',
-			'target': 'x86_64-hypervisor-linux-gnu'
-		}
+	def __init__(self, desc):
+                self.context = copy.deepcopy(desc)
+		self.add_context('pass1_dir', '/pass1')
+                self.add_context('target', 'x86_64-hypervisor-linux-gnu')
 
 	def add_context(self, k, v):
 		if k is not None:
@@ -88,8 +88,7 @@ class Package:
 		self.yml = yml
 		self.desc = yaml.load(yml)
 		self.name = self.desc['name']
-		self.template = Template()
-		self.template.add_context('version', self.desc.get('version'))
+		self.template = Template(self.desc)
 		#print(yaml)
 		
 		self.dependencies = self.desc.get('dependencies', [])
@@ -98,7 +97,7 @@ class Package:
 		if dl is None:
 			self.download = None
 		else:
-			self.download = Download(build_dir, dl)
+			self.download = Download(build_dir, dl, self.name)
 
 	def __repr__(self):
 		return "Package(name='" + self.name + "')"
@@ -116,8 +115,9 @@ class Package:
 
 
 class Download:
-	def __init__(self, build_dir, url):
+	def __init__(self, build_dir, url, name):
 		self.url = url
+                self.name = name
 		self.filename = build_dir.downloads + '/' + url.split('/')[-1]
 		self.build_dir = build_dir
 
@@ -129,10 +129,11 @@ class Download:
 
 	def unpack(self, log):
 		log.set_status('unpacking')
-		self.build_dir.clean_source()
-		if self.filename.endswith('.tar.gz'):
+		self.build_dir.prepare_source(self.name)
+                f = str(self.filename)
+		if f.endswith('.tar.gz') or f.endswith('.tar.bz2') or f.endswith('.tar.xz'):
 			subprocess.call(['tar', '--directory=' + self.build_dir.source, '-xf', self.filename])
-		else:
+                else:
 			print("Uncompressing %s not supported" % self.filename)
 			sys.exit(-1)
 
@@ -144,8 +145,14 @@ class Download:
 				log.set_progress(p)
 
 		log.set_status('downloading')
-		urllib.urlretrieve(self.url, self.filename, progress)
-
+                try:
+                        urllib.urlretrieve(self.url, self.filename, progress)
+                except IOError as e:
+                        print("Download of '%s' failed: %s" % (self.url, e), file=\
+sys.stderr)
+                        sys.exit(-1)
+              
+                        
 	
 class BuildDir:
 	def __init__(self, path):
@@ -158,12 +165,14 @@ class BuildDir:
 		self.source = path + '/source'
 		if not os.path.exists(self.downloads):
 			os.mkdir(self.downloads)
-		if not os.path.exists(self.source):
-			os.mkdir(self.source)
 
-	def clean_source(self):
-		shutil.rmtree(self.source)
-		os.mkdir(self.source)
+	def prepare_source(self, name):
+                if os.path.exists(self.source):
+                        shutil.rmtree(self.source)
+                if os.path.exists(name):
+                        shutil.copytree(name, self.source)
+                else:
+                        os.mkdir(self.source)
 
 class Build:
 	def __init__(self, repository, base, sha1, build, build_dir, docker_build = None, download = None):
@@ -194,10 +203,11 @@ class Build:
 
 
 	def create_docker(self, log):
-		build_script = open(self.build_dir.source + '/build.sh', 'w')
+		build_script = open(self.build_dir.source + '/' + self.repository, 'w')
 		build_script.write('''
 #!/bin/bash
 set +h
+set -xeuo pipefail
 LC_ALL=POSIX
 PATH=/tools/bin:/bin:/usr/bin
 export LC_ALL PATH
@@ -213,7 +223,7 @@ rm -fr /work/*
 
 		build_script.close()
 
-		container = docker_client.create_container(image=self.base, command='build.sh', detach=False)
+		container = docker_client.create_container(image=self.base, command=self.repository, detach=False)
 		container_id = container.get('Id')
 		docker_client.start(container=container_id, binds = {
 			self.build_dir.source: {
