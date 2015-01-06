@@ -308,10 +308,13 @@ class BuildPipeline:
                 return build
 
         def build_base(self):
-                tools_base_build = ['yum -y groupinstall "Development tools"', 'mkdir /tools /work /build']
+                tools_base_build = ['yum -y groupinstall "Development tools"', 
+                                    'yum -y install patch',
+                                    'mkdir /tools /work /build', 
+                                    'mkdir -v /tools/lib && ln -sv lib /tools/lib64']
                 self.sha1.update(str(tools_base_build))
                 repository = 'base'
-                build = Build(repository, 'centos:latest', self.sha1.hexdigest(), tools_base_build, build_dir,
+                build = Build(repository, 'fedora:20', self.sha1.hexdigest(), tools_base_build, build_dir,
                               docker_build=['MAINTAINER Owen Fraser-Green <owen@fraser-green.com>', 
                                             'ENTRYPOINT ["/bin/bash"]',
                                             'VOLUME ["/source"]',

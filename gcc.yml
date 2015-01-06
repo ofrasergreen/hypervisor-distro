@@ -21,14 +21,14 @@ build:
       - ln -sf ../{{ mpfr.name }}-{{ mpfr.version }} {{ mpfr.name }}
       - ln -sf ../{{ gmp.name }}-{{ gmp.version }} {{ gmp.name }}
       - ln -sf ../{{ mpc.name }}-{{ mpc.version }} {{ mpc.name }}
-      - ../fix_pass1_paths.sh
-      - patch -p0 < ../fix_stack_protection_detection_for_glibc.patch
+      - patch -p1 < ../*.patch
       - mkdir -v ../gcc-build
-      - cd ../gcc-build
   tools1:
     dependencies:
       - binutils
     steps:
+      - ../fix_pass1_paths.sh
+      - cd ../gcc-build
       - >
         ../gcc-{{ version }}/configure --target={{ target }}
         --prefix=/tools
@@ -67,4 +67,4 @@ build:
         --disable-libstdcxx-pch
         --with-gxx-include-dir=/tools/{{ target }}/include/c++/{{ version }}
       - make -j8
-      - make install
+      - make -j8 install
