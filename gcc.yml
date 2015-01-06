@@ -1,40 +1,70 @@
 name: gcc
 version: 4.9.2
-dependencies:
-  - binutils
-  - mpfr
-  - gmp
-  - mpc
-download: ftp://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}/{{ name }}-{{ version }}.tar.bz2
-pass1:
-  - cd {{ name }}-{{ version }}
-  - ln -sf /tools/mpfr /tools/gmp /tools/mpc .
-  - ../fix_pass1_paths.sh
-  - patch -p0 < ../fix_stack_protection_detection_for_glibc.patch
-  - mkdir -v ../gcc-build
-  - cd ../gcc-build
-  - >
-    ../gcc-{{ version }}/configure --target={{ target }}
-    --prefix=/tools
-    --with-sysroot={{ pass1_dir }}
-    --with-newlib
-    --without-headers
-    --with-local-prefix=/tools
-    --with-native-system-header-dir=/tools/include
-    --disable-nls
-    --disable-shared
-    --disable-multilib
-    --disable-decimal-float
-    --disable-threads
-    --disable-libatomic
-    --disable-libgomp
-    --disable-libitm
-    --disable-libquadmath
-    --disable-libsanitizer
-    --disable-libssp
-    --disable-libvtv
-    --disable-libcilkrts
-    --disable-libstdc++-v3
-    --enable-languages=c,c++ 
-  - make
-  - make install
+mpfr:
+  name: mpfr
+  version: 3.1.2
+gmp:
+  name: gmp
+  version: 6.0.0
+mpc:
+  name: mpc
+  version: 1.0.2
+download: 
+  - ftp://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}/{{ name }}-{{ version }}.tar.bz2
+  - ftp://ftp.gnu.org/gnu/{{ mpfr.name }}/{{ mpfr.name }}-{{ mpfr.version }}.tar.xz
+  - ftp://ftp.gnu.org/gnu/{{ gmp.name }}/{{ gmp.name }}-{{ gmp.version }}a.tar.xz
+  - ftp://ftp.gnu.org/gnu/{{ mpc.name }}/{{ mpc.name }}-{{ mpc.version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+      - ln -sf ../{{ mpfr.name }}-{{ mpfr.version }} {{ mpfr.name }}
+      - ln -sf ../{{ gmp.name }}-{{ gmp.version }} {{ gmp.name }}
+      - ln -sf ../{{ mpc.name }}-{{ mpc.version }} {{ mpc.name }}
+      - ../fix_pass1_paths.sh
+      - patch -p0 < ../fix_stack_protection_detection_for_glibc.patch
+      - mkdir -v ../gcc-build
+      - cd ../gcc-build
+  tools1:
+    dependencies:
+      - binutils
+    steps:
+      - >
+        ../gcc-{{ version }}/configure --target={{ target }}
+        --prefix=/tools
+        --with-sysroot=/build
+        --with-newlib
+        --without-headers
+        --with-local-prefix=/tools
+        --with-native-system-header-dir=/tools/include
+        --disable-nls
+        --disable-shared
+        --disable-multilib
+        --disable-decimal-float
+        --disable-threads
+        --disable-libatomic
+        --disable-libgomp
+        --disable-libitm
+        --disable-libquadmath
+        --disable-libsanitizer
+        --disable-libssp
+        --disable-libvtv
+        --disable-libcilkrts
+        --disable-libstdc++-v3
+        --enable-languages=c,c++ 
+      - make -j8
+      - make install
+  tools2:
+    steps:
+      - >
+        ../gcc-{{ version }}/libstdc++-v3/configure
+        --host={{ target }}
+        --prefix=/tools
+        --disable-multilib
+        --disable-shared
+        --disable-nls
+        --disable-libstdcxx-threads
+        --disable-libstdcxx-pch
+        --with-gxx-include-dir=/tools/{{ target }}/include/c++/{{ version }}
+      - make -j8
+      - make install

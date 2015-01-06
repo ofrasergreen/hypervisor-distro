@@ -65,7 +65,6 @@ class Log:
 class Template:
 	def __init__(self, desc):
                 self.context = copy.deepcopy(desc)
-		self.add_context('pass1_dir', '/pass1')
                 self.add_context('target', 'x86_64-hypervisor-linux-gnu')
 
 	def add_context(self, k, v):
@@ -86,13 +85,16 @@ class Template:
 class Package:
 	def __init__(self, build_dir, yml):
 		self.yml = yml
-		self.desc = yaml.load(yml)
+                try:
+                        self.desc = yaml.load(yml)
+                except Exception as e:
+                        print("Failed to read \n---%s\n---\n%s" % (yml, e), file=sys.stderr)
+                        sys.exit(-1)
+              
 		self.name = self.desc['name']
 		self.template = Template(self.desc)
-		#print(yaml)
-		
-		self.dependencies = self.desc.get('dependencies', [])
-		self.pass1 = self.template.render(self.desc.get('pass1'))
+		#print(yaml)		
+		self.build = self.desc.get('build', {})
 		dl = self.template.render(self.desc.get('download'))
 		if dl is None:
 			self.download = None
@@ -102,8 +104,12 @@ class Package:
 	def __repr__(self):
 		return "Package(name='" + self.name + "')"
 
-	def dependencies_satisfied(self, packages):
-		for d in self.dependencies:
+        def build_steps(self, stage):
+                return self.template.render(self.build.get('common', {}).get('steps', []) + self.build.get(stage, {}).get('steps', []))
+
+	def dependencies_satisfied(self, packages, step):
+                deps = self.build.get(step).get('dependencies', [])
+		for d in deps:
 			found = False
 			for p in packages:
 				if d == p.name:
@@ -115,30 +121,37 @@ class Package:
 
 
 class Download:
-	def __init__(self, build_dir, url, name):
-		self.url = url
+	def __init__(self, build_dir, urls, name):
+                if isinstance(urls, list):
+			self.urls = urls
+                else:
+                        self.urls = [urls]
                 self.name = name
-		self.filename = build_dir.downloads + '/' + url.split('/')[-1]
 		self.build_dir = build_dir
 
+        def filename(self, url):
+                return self.build_dir.downloads + '/' + url.split('/')[-1]
+
 	def run(self, log):
-		if not os.path.exists(self.filename):
-			self.download_url(log)
-
-		self.unpack(log)
-
-	def unpack(self, log):
-		log.set_status('unpacking')
 		self.build_dir.prepare_source(self.name)
-                f = str(self.filename)
+                for url in self.urls:
+                        filename = self.filename(url)
+                        if not os.path.exists(filename):
+                                self.download_url(log, url, filename)
+                                
+                        self.unpack(log, filename)
+
+	def unpack(self, log, filename):
+		log.set_status('unpacking %s' % filename)
+                f = str(filename)
 		if f.endswith('.tar.gz') or f.endswith('.tar.bz2') or f.endswith('.tar.xz'):
-			subprocess.call(['tar', '--directory=' + self.build_dir.source, '-xf', self.filename])
+			subprocess.call(['tar', '--directory=' + self.build_dir.source, '-xf', filename])
                 else:
-			print("Uncompressing %s not supported" % self.filename)
+			print("Uncompressing %s not supported" % filename)
 			sys.exit(-1)
 
-	def download_url(self, log):
-		def progress(blocks_transferred, block_size, file_size):
+	def download_url(self, log, url, filename):
+                def progress(blocks_transferred, block_size, file_size):
 			if file_size > 0:
 				p = float(blocks_transferred * block_size) / float(file_size)
 				#print(p)
@@ -146,10 +159,9 @@ class Download:
 
 		log.set_status('downloading')
                 try:
-                        urllib.urlretrieve(self.url, self.filename, progress)
+                        urllib.urlretrieve(url, filename, progress)
                 except IOError as e:
-                        print("Download of '%s' failed: %s" % (self.url, e), file=\
-sys.stderr)
+                        print("Download of '%s' failed: %s" % (url, e), file=sys.stderr)
                         sys.exit(-1)
               
                         
@@ -175,12 +187,12 @@ class BuildDir:
                         os.mkdir(self.source)
 
 class Build:
-	def __init__(self, repository, base, sha1, build, build_dir, docker_build = None, download = None):
+	def __init__(self, repository, base, sha1, steps, build_dir, docker_build = None, download = None):
 		self.repository = repository
 		self.sha1 = sha1
 		self.image = repository + ":" + sha1
 		self.base = base
-		self.build = build
+		self.steps = steps
 		self.build_dir = build_dir
 		self.docker_build = docker_build
 		self.download = download
@@ -215,7 +227,7 @@ cp -r * /work
 cd /work
 
 ''')
-		for step in self.build:
+		for step in self.steps:
 			build_script.write(step + '\n')
 		build_script.write('''
 rm -fr /work/*
@@ -246,7 +258,7 @@ FROM %s
 %s
 
 RUN %s
-	''' % (self.base, '\n'.join(docker_build), ' && '.join(self.build))
+	''' % (self.base, '\n'.join(docker_build), ' && '.join(self.steps))
 		f = io.BytesIO(dockerfile.encode('utf-8'))
 		for line in docker_client.build(fileobj=f, tag=self.image):
 			out = json.loads(line)
@@ -256,7 +268,57 @@ RUN %s
 				print("    " + out['errorDetail']['message'], file=sys.stderr)
 			#print(out)
 
+class BuildPipeline:
+        def __init__(self, stages, packages):
+                self.sha1 = hashlib.sha1()
+                self.stages = stages
+                self.packages = packages
 
+        def run(self):
+                build = None
+                for stage in self.stages:
+                        build = self.run_stage(stage, build)
+
+        def run_stage(self, stage, build):
+                if stage == 'base':
+                        return self.build_base()
+                else:
+                        packages = self.stage_packages(stage)
+                        return self.build_packages(stage, packages, build)
+
+        def stage_packages(self, stage):
+                packages = []
+                changed = True
+                while changed:
+                        changed = False
+                        for p in self.packages:
+                                if p in packages or stage not in p.build:
+                                        continue
+                                if p.dependencies_satisfied(packages, stage):
+                                        changed = True
+                                        packages.append(p)
+                return packages
+
+        def build_packages(self, stage, packages, build):
+                for p in packages:
+                        self.sha1.update(p.yml)
+                        base = build.image
+                        build = Build(stage + "-" + p.name, base, self.sha1.hexdigest(), p.build_steps(stage), build_dir, download = p.download)
+                        build.run()
+                return build
+
+        def build_base(self):
+                tools_base_build = ['yum -y groupinstall "Development tools"', 'mkdir /tools /work /build']
+                self.sha1.update(str(tools_base_build))
+                repository = 'base'
+                build = Build(repository, 'centos:latest', self.sha1.hexdigest(), tools_base_build, build_dir,
+                              docker_build=['MAINTAINER Owen Fraser-Green <owen@fraser-green.com>', 
+                                            'ENTRYPOINT ["/bin/bash"]',
+                                            'VOLUME ["/source"]',
+                                            'WORKDIR /source'])
+                build.run()
+                return build
+                
 
 if os.getenv('BUILD_DIR') is None:
 	print("Please set BUILD_DIR environment variable", file=sys.stderr)
@@ -270,33 +332,4 @@ for fn in os.listdir('.'):
 			p = Package(build_dir, f.read())
 			packages.append(p)
 
-sha1 = hashlib.sha1()
-
-# pass1
-pass1_base_build = ['yum -y groupinstall "Development tools"', 'mkdir /pass1 /tools /work']
-sha1.update(str(pass1_base_build))
-repository = 'pass1'
-build = Build(repository, 'centos:latest', sha1.hexdigest(), pass1_base_build, build_dir,
-	docker_build=['MAINTAINER Owen Fraser-Green <owen@fraser-green.com>', 
-	'ENTRYPOINT ["/bin/bash"]',
-	'VOLUME ["/source"]',
-	'WORKDIR /source'])
-build.run()
-	
-
-pass1_packages = []
-changed = True
-while changed:
-	changed = False
-	for p in packages:
-		if p in pass1_packages or not p.pass1:
-			continue
-		if p.dependencies_satisfied(pass1_packages):
-			changed = True
-			pass1_packages.append(p)
-
-for p in pass1_packages:
-	sha1.update(p.yml)
-	base = build.image
-	build = Build(repository + "-" + p.name, base, sha1.hexdigest(), p.pass1, build_dir, download = p.download)
-	build.run()
+BuildPipeline(['base', 'tools1', 'tools2'], packages).run()

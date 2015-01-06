@@ -1,10 +1,21 @@
 name: binutils
 version: 2.25
-download: ftp://ftp.gnu.org/gnu/binutils/binutils-{{ version }}.tar.gz
-signature: ftp://ftp.gnu.org/gnu/binutils/binutils-{{ version }}.tar.gz.sig
-pass1:
-  - cd binutils-{{ version }}
-  - ./configure --prefix=/tools --with-sysroot={{ pass1_dir }} --with-lib-path=/tools/lib --target={{ target }} --disable-nls --disable-werror
-  - make -j4
-  - make install
+download: ftp://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd binutils-{{ version }}
+      - patch -p1 < ../*.patch
+  tools1:
+    steps:
+      - >
+        ./configure 
+        --prefix=/tools 
+        --with-sysroot=/build 
+        --with-lib-path=/tools/lib 
+        --target={{ target }} 
+        --disable-nls 
+        --disable-werror
+      - make -j8
+      - make -j8 install
 
