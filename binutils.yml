@@ -10,9 +10,9 @@ build:
     steps:
       - >
         ./configure 
-        --prefix=/tools 
-        --with-sysroot=/build 
-        --with-lib-path=/tools/lib 
+        --prefix={{ tools.dir }} 
+        --with-sysroot={{ build.dir }} 
+        --with-lib-path={{ tools.dir }}/lib 
         --target={{ target }} 
         --disable-nls 
         --disable-werror

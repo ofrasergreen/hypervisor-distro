@@ -31,12 +31,12 @@ build:
       - cd ../gcc-build
       - >
         ../gcc-{{ version }}/configure --target={{ target }}
-        --prefix=/tools
-        --with-sysroot=/build
+        --prefix={{ tools.dir }}
+        --with-sysroot={{ build.dir }}
         --with-newlib
         --without-headers
-        --with-local-prefix=/tools
-        --with-native-system-header-dir=/tools/include
+        --with-local-prefix={{ tools.dir }}
+        --with-native-system-header-dir={{ tools.dir }}/include
         --disable-nls
         --disable-shared
         --disable-multilib
@@ -56,15 +56,17 @@ build:
       - make install
   tools2:
     steps:
+      - ../fix_pass1_paths.sh
+      - cd ../gcc-build
       - >
         ../gcc-{{ version }}/libstdc++-v3/configure
         --host={{ target }}
-        --prefix=/tools
+        --prefix={{ tools.dir }}
         --disable-multilib
         --disable-shared
         --disable-nls
         --disable-libstdcxx-threads
         --disable-libstdcxx-pch
-        --with-gxx-include-dir=/tools/{{ target }}/include/c++/{{ version }}
+        --with-gxx-include-dir={{ tools.dir }}/{{ target }}/include/c++/{{ version }}
       - make -j8
       - make -j8 install

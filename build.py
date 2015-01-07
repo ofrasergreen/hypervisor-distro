@@ -66,6 +66,8 @@ class Template:
 	def __init__(self, desc):
                 self.context = copy.deepcopy(desc)
                 self.add_context('target', 'x86_64-hypervisor-linux-gnu')
+                self.add_context('build', {'dir': '/build'})
+                self.add_context('tools', {'dir': '/tools'})
 
 	def add_context(self, k, v):
 		if k is not None:
@@ -309,9 +311,11 @@ class BuildPipeline:
 
         def build_base(self):
                 tools_base_build = ['yum -y groupinstall "Development tools"', 
-                                    'yum -y install patch',
-                                    'mkdir /tools /work /build', 
-                                    'mkdir -v /tools/lib && ln -sv lib /tools/lib64']
+                                    'yum -y install patch gcc-c++ bison diffutils findutils gawk grep m4 sed flex flex-devel bison-devel file',
+                                    'mkdir -pv /build/tools /work', 
+                                    'mkdir -v /build/tools/lib',
+                                    'ln -sv /build/tools /',
+                                    'ln -sv /tools/lib /tools/lib64']
                 self.sha1.update(str(tools_base_build))
                 repository = 'base'
                 build = Build(repository, 'fedora:20', self.sha1.hexdigest(), tools_base_build, build_dir,
