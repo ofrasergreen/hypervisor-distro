@@ -1,0 +1,17 @@
+name: tar
+version: 1.28
+download: http://ftp.gnu.org/gnu/tar/tar-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 check
+      - make -j8 install

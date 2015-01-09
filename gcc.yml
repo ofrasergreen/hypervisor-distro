@@ -70,3 +70,29 @@ build:
         --with-gxx-include-dir={{ tools.dir }}/{{ target }}/include/c++/{{ version }}
       - make -j8
       - make -j8 install
+  tools3:
+    steps:
+      - >
+        cat gcc/limitx.h gcc/glimits.h gcc/limity.h >
+        `dirname $({{ target }}-gcc -print-libgcc-file-name)`/include-fixed/limits.h
+      - ../fix_pass1_paths.sh
+      - cd ../gcc-build
+      - >
+        CC={{ target }}-gcc
+        AR={{ target }}-ar
+        RANLIB={{ target }}-ranlib
+        ../gcc-{{ version }}/configure
+        --prefix={{ tools.dir }}
+        --with-local-prefix={{ tools.dir }}
+        --with-native-system-header-dir={{ tools.dir }}/include
+        --enable-languages=c,c++
+        --disable-libstdcxx-pch
+        --disable-multilib
+        --disable-bootstrap
+        --disable-libgomp
+      - make -j8
+      - make -j8 install
+      - ln -sv gcc /tools/bin/cc
+      - echo 'main(){}' > dummy.c
+      - cc dummy.c
+      - "readelf -l a.out | grep ': /tools'"

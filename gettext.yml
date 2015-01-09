@@ -1,0 +1,23 @@
+name: gettext
+version: 0.19.4
+download: http://ftp.gnu.org/gnu/gettext/gettext-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - cd gettext-tools
+      - >
+        EMACS="no"
+        ./configure 
+        --prefix={{ tools.dir }}
+        --disable-shared
+      - make -j8 -C gnulib-lib
+      - make -j8 -C intl
+      - make -j8 -C src msgfmt
+      - make -j8 -C src msgmerge
+      - make -j8 -C src xgettext
+      - cp -v src/{msgfmt,msgmerge,xgettext} /tools/bin

@@ -1,0 +1,18 @@
+name: gawk
+version: 4.1.1
+download: http://ftp.gnu.org/gnu/gawk/gawk-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+      - texinfo
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 check
+      - make -j8 install

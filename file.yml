@@ -1,0 +1,17 @@
+name: file
+version: 5.21
+download: ftp://ftp.astron.com/pub/file/file-{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 check
+      - make -j8 install

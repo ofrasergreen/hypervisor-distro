@@ -1,0 +1,13 @@
+name: bzip2
+version: 1.0.6
+download: http://www.bzip.org/{{ version }}/{{ name }}-{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - make -j8
+      - make PREFIX=/tools install

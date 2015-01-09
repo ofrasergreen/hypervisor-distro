@@ -1,0 +1,21 @@
+name: tcl
+version: 
+  major_minor: 8.6
+  micro: 3
+download: http://downloads.sourceforge.net/project/tcl/Tcl/{{ version.major_minor }}.{{ version.micro }}/{{ name }}{{ version.major_minor }}.{{ version.micro }}-src.tar.gz
+build:
+  common:
+    steps:
+      - cd tcl{{ version.major_minor }}.{{ version.micro }}/unix
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure --prefix={{ tools.dir }}
+      - make -j8
+      - TZ=UTC make -j8 test
+      - make -j8 install
+      - chmod -v u+w /{{ tools.dir }}/lib/libtcl{{ version.major_minor }}.so
+      - make install-private-headers
+      - ln -sv tclsh{{ version.major_minor }} /tools/bin/tclsh

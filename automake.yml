@@ -1,0 +1,17 @@
+name: automake
+version: 1.14.1
+download: http://ftp.gnu.org/gnu/automake/automake-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  LATER:
+    dependencies:
+      - gcc
+      - autoconf
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 install

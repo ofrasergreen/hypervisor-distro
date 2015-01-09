@@ -1,0 +1,20 @@
+name: util-linux
+version: 2.25.2
+download: https://www.kernel.org/pub/linux/utils/util-linux/v2.25/util-linux-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure
+        --prefix={{ tools.dir }}
+        --without-python
+        --disable-makeinstall-chown
+        --without-systemdsystemunitdir
+        PKG_CONFIG=""
+      - make -j8
+      - make -j8 install

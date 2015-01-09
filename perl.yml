@@ -1,0 +1,20 @@
+name: perl
+version: 5.20.1
+download: http://www.cpan.org/src/5.0/perl-{{ version }}.tar.bz2
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        sh Configure 
+        -des 
+        -Dprefix=/tools 
+        -Dlibs=-lm
+      - cp -v perl cpan/podlators/pod2man /tools/bin
+      - mkdir -pv /tools/lib/perl5/5.20.1
+      - cp -Rv lib/* /tools/lib/perl5/5.20.1
+

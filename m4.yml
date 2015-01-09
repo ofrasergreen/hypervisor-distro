@@ -1,0 +1,17 @@
+name: m4
+version: 1.4.17
+download: http://ftp.gnu.org/gnu/m4/m4-{{ version }}.tar.xz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 check
+      - make -j8 install

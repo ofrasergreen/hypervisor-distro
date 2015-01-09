@@ -1,0 +1,17 @@
+name: sed
+version: 4.2.2
+download: http://ftp.gnu.org/gnu/sed/sed-4.2.2.tar.bz2
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+      - make -j8
+      - make -j8 check
+      - make -j8 install

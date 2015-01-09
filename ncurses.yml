@@ -1,0 +1,24 @@
+name: ncurses
+version: 5.9
+download: http://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+        --with-shared
+        --without-debug
+        --without-ada
+        --enable-widec
+        --enable-overwrite
+      - make -j8 install
+      - make install
+
+
+

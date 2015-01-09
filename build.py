@@ -225,7 +225,7 @@ set -xeuo pipefail
 LC_ALL=POSIX
 PATH=/tools/bin:/bin:/usr/bin
 export LC_ALL PATH
-cp -r * /work
+cp -ar * /work
 cd /work
 
 ''')
@@ -311,7 +311,7 @@ class BuildPipeline:
 
         def build_base(self):
                 tools_base_build = ['yum -y groupinstall "Development tools"', 
-                                    'yum -y install patch gcc-c++ bison diffutils findutils gawk grep m4 sed flex flex-devel bison-devel file',
+                                    'yum -y install autoconf automake patch gcc-c++ bison diffutils findutils gawk grep m4 sed flex flex-devel bison-devel file',
                                     'mkdir -pv /build/tools /work', 
                                     'mkdir -v /build/tools/lib',
                                     'ln -sv /build/tools /',
@@ -339,4 +339,4 @@ for fn in os.listdir('.'):
 			p = Package(build_dir, f.read())
 			packages.append(p)
 
-BuildPipeline(['base', 'tools1', 'tools2'], packages).run()
+BuildPipeline(['base', 'tools1', 'tools2', 'tools3', 'tools-stripping'], packages).run()

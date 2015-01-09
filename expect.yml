@@ -1,0 +1,20 @@
+name: expect
+version: 5.45
+download: http://prdownloads.sourceforge.net/expect/expect{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd expect{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+      - tcl
+    steps:
+      - >
+        ./configure --prefix={{ tools.dir }}
+        --with-tcl={{ tools.dir }}/lib
+        --with-tclinclude={{ tools.dir }}/include
+      - make -j8
+      - make -j8 test
+      - make -j8 SCRIPTS="" install
+

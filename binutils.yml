@@ -18,4 +18,22 @@ build:
         --disable-werror
       - make -j8
       - make -j8 install
-
+  tools2:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        CC={{ target }}-gcc
+        AR={{ target }}-ar
+        RANLIB={{ target }}-ranlib
+        ./configure
+        --prefix={{ tools.dir }}
+        --disable-nls
+        --disable-werror
+        --with-lib-path={{ tools.dir }}/lib 
+        --with-sysroot={{ build.dir }}
+      - make -j8
+      - make -j8 install
+      - make -C ld clean
+      - make -j8 -C ld LIB_PATH=/usr/lib:/lib
+      - cp -v ld/ld-new /tools/bin

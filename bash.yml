@@ -1,0 +1,19 @@
+name: bash
+version: 4.3.30
+download: http://ftp.gnu.org/gnu/{{ name }}/{{ name }}-{{ version }}.tar.gz
+build:
+  common:
+    steps:
+      - cd {{ name }}-{{ version }}
+  tools3:
+    dependencies:
+      - gcc
+    steps:
+      - >
+        ./configure 
+        --prefix={{ tools.dir }}
+        --without-bash-malloc
+      - make -j8
+      - make -j8 tests
+      - make -j8 install
+      - ln -sv bash /tools/bin/sh
