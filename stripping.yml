@@ -1,7 +1,7 @@
 name: stripping
 build:
-  tools-stripping:
+  tools4:
     steps:
-      - strip --strip-debug /tools/lib/*
-      - /usr/bin/strip --strip-unneeded /tools/{,s}bin/*
+      - strip --strip-debug /tools/lib/* || true
+      - /usr/bin/strip --strip-unneeded /tools/{,s}bin/* || true
       - rm -rf /tools/{,share}/{info,man,doc}

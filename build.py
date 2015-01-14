@@ -32,7 +32,6 @@ class Log:
 
 	def set_progress(self, progress):
 		n = int(progress * 42)
-		#print(n)
 		if n != self.progress:
 			self.progress = n
 			self.show()
@@ -135,7 +134,6 @@ class Download:
                 return self.build_dir.downloads + '/' + url.split('/')[-1]
 
 	def run(self, log):
-		self.build_dir.prepare_source(self.name)
                 for url in self.urls:
                         filename = self.filename(url)
                         if not os.path.exists(filename):
@@ -189,7 +187,8 @@ class BuildDir:
                         os.mkdir(self.source)
 
 class Build:
-	def __init__(self, repository, base, sha1, steps, build_dir, docker_build = None, download = None):
+	def __init__(self, name, repository, base, sha1, steps, build_dir, docker_build = None, download = None):
+                self.name = name
 		self.repository = repository
 		self.sha1 = sha1
 		self.image = repository + ":" + sha1
@@ -200,6 +199,7 @@ class Build:
 		self.download = download
 
 	def run(self):
+		self.build_dir.prepare_source(self.name)
 		log = Log(self.repository)
 		try:
 			docker_client.history(self.image)
@@ -210,21 +210,28 @@ class Build:
 			log.set_status('building')
 
 			if (self.docker_build):
-				self.build_docker(self.docker_build)
+				self.build_docker(self.base, self.docker_build, self.steps)
 			else:
 				self.create_docker(log)
 		log.done()
 
 
 	def create_docker(self, log):
-		build_script = open(self.build_dir.source + '/' + self.repository, 'w')
+                build_script_file = self.build_dir.source + '/' + self.repository
+		build_script = open(build_script_file, 'w')
+                if self.repository.startswith('tools'):
+                        path = "/tools/bin:/bin:/usr/bin"
+                else:
+                        path = "/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin"
+
 		build_script.write('''
 #!/bin/bash
 set +h
 set -xeuo pipefail
 LC_ALL=POSIX
-PATH=/tools/bin:/bin:/usr/bin
+PATH=''' + path + '''
 export LC_ALL PATH
+mkdir -v /work
 cp -ar * /work
 cd /work
 
@@ -232,12 +239,13 @@ cd /work
 		for step in self.steps:
 			build_script.write(step + '\n')
 		build_script.write('''
-rm -fr /work/*
+rm -fr /work
 ''')
-
+                
 		build_script.close()
+                os.chmod(self.build_dir.source + '/' + self.repository, 0755)
 
-		container = docker_client.create_container(image=self.base, command=self.repository, detach=False)
+		container = docker_client.create_container(image=self.base, command='/source/' + self.repository, detach=False)
 		container_id = container.get('Id')
 		docker_client.start(container=container_id, binds = {
 			self.build_dir.source: {
@@ -251,24 +259,49 @@ rm -fr /work/*
 			log.done()
 			sys.exit(-1)
 
-		log.set_status("committing")
-		docker_client.commit(container=container_id, repository=self.repository, tag=self.sha1)
+                if self.repository == 'tools4-finalize':
+                        log.set_status('creating root image')
+                        self.build_docker('scratch', [
+                                'MAINTAINER Owen Fraser-Green <owen@fraser-green.com>', 
+                                'VOLUME ["/source"]',
+                                'ADD tools.tar.bz2 /',
+                                'ENV HOME /source',
+                                'ENV PATH /bin:/usr/bin:/sbin:/usr/sbin:/tools/bin',
+                                'WORKDIR /source',
+                                'ENTRYPOINT ["/tools/bin/bash", "-c"]',
+                                'CMD ["/tools/bin/bash"]'
+                                ])
+                else:
+                        log.set_status("committing")
+                        docker_client.commit(container=container_id, repository=self.repository, tag=self.sha1)
 
-	def build_docker(self, docker_build):
-		dockerfile = '''
+
+	def build_docker(self, base, docker_build, steps=[]):
+		dockerfile = open(self.build_dir.source + '/Dockerfile', 'w')
+                dockerfile.write('''
 FROM %s
 %s
+''' % (base, '\n'.join(docker_build)))
 
+                if steps:
+                        dockerfile.write('''
 RUN %s
-	''' % (self.base, '\n'.join(docker_build), ' && '.join(self.steps))
-		f = io.BytesIO(dockerfile.encode('utf-8'))
-		for line in docker_client.build(fileobj=f, tag=self.image):
+''' % ' && '.join(steps))
+		dockerfile.close()
+
+                print()
+                print("tag: %s" % self.image)
+		for line in docker_client.build(path=self.build_dir.source,tag=self.image):
 			out = json.loads(line)
 			if 'stream' in out:
 				print("    " + out['stream'], end="")
 			elif 'errorDetail' in out:
 				print("    " + out['errorDetail']['message'], file=sys.stderr)
-			#print(out)
+
+        def tag_stage(self, stage):
+                tag = "latest"
+                docker_client.tag(image=self.image, repository=stage, tag=tag)
+                return stage + ':' + tag
 
 class BuildPipeline:
         def __init__(self, stages, packages):
@@ -301,13 +334,14 @@ class BuildPipeline:
                                         packages.append(p)
                 return packages
 
-        def build_packages(self, stage, packages, build):
+        def build_packages(self, stage, packages, base):
+                build = None
                 for p in packages:
                         self.sha1.update(p.yml)
+                        build = Build(p.name, stage + "-" + p.name, base, self.sha1.hexdigest(), p.build_steps(stage), build_dir, download = p.download)
                         base = build.image
-                        build = Build(stage + "-" + p.name, base, self.sha1.hexdigest(), p.build_steps(stage), build_dir, download = p.download)
                         build.run()
-                return build
+                return build.tag_stage(stage)
 
         def build_base(self):
                 tools_base_build = ['yum -y groupinstall "Development tools"', 
@@ -318,13 +352,13 @@ class BuildPipeline:
                                     'ln -sv /tools/lib /tools/lib64']
                 self.sha1.update(str(tools_base_build))
                 repository = 'base'
-                build = Build(repository, 'fedora:20', self.sha1.hexdigest(), tools_base_build, build_dir,
+                build = Build(repository, repository, 'fedora:20', self.sha1.hexdigest(), tools_base_build, build_dir,
                               docker_build=['MAINTAINER Owen Fraser-Green <owen@fraser-green.com>', 
                                             'ENTRYPOINT ["/bin/bash"]',
                                             'VOLUME ["/source"]',
                                             'WORKDIR /source'])
                 build.run()
-                return build
+                return build.tag_stage(repository)
                 
 
 if os.getenv('BUILD_DIR') is None:
@@ -339,4 +373,4 @@ for fn in os.listdir('.'):
 			p = Package(build_dir, f.read())
 			packages.append(p)
 
-BuildPipeline(['base', 'tools1', 'tools2', 'tools3', 'tools-stripping'], packages).run()
+BuildPipeline(['base', 'tools1', 'tools2', 'tools3', 'tools4', 'system1'], packages).run()

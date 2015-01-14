@@ -10,8 +10,8 @@ build:
       - gcc
     steps:
       - >
+        FORCE_UNSAFE_CONFIGURE=1
         ./configure 
         --prefix={{ tools.dir }}
       - make -j8
-      - make -j8 check
       - make -j8 install

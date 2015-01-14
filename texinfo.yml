@@ -13,5 +13,4 @@ build:
         ./configure 
         --prefix={{ tools.dir }}
       - make -j8
-      - make -j8 check
       - make -j8 install

@@ -1,0 +1,13 @@
+name: finalize
+build:
+  tools4:
+    dependencies:
+      - stripping
+    steps:
+      - cd {{ build.dir }}
+      - mkdir -pv {dev,proc,sys,run,etc,root}
+      - cat > etc/resolv.conf <<'EOF'
+      - nameserver 8.8.8.8
+      - nameserver 8.8.4.4
+      - EOF
+      - tar cjf /source/tools.tar.bz2 tools --transform='s,^./,,'
